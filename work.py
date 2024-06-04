@@ -16,6 +16,7 @@ import re
 import pickle
 from datetime import datetime
 import sys
+from multiprocessing import Process
 
 # sys.setrecursionlimit(8000)
 
@@ -55,7 +56,6 @@ def preprocess_soup(soup):
         if hasattr(tag, "attrs"):
             style = tag.attrs.get("style")
             if style:
-                # inlinea style
                 style = style_kv_obj(style)
                 if style is not None:
                     for k, v in style.items():
@@ -233,12 +233,13 @@ def run():
             soup = pdf_soup(sample)
             document = handle_sample(sample, soup)
 
-            document.to_csv(sample + ".out.csv")
-            document.to_json(sample + ".out.json")
-            document.to_excel(
-                sample + ".out.xlsx"
-            )  # grozan i nekonzistentan format ali ga normiji vole...
-            document.to_pickle(sample + ".out.pkl")
+            base_name = os.path.splitext(os.path.basename(sample))[0]
+            os.makedirs("./out", exist_ok=True)
+
+            document.to_csv("./out/" + base_name + ".gen.csv")
+            document.to_json("./out/" + base_name + ".gen.json")
+            document.to_excel("./out/" + base_name + ".gen.xlsx")
+            document.to_pickle("./out/" + base_name + ".gen.pkl")
         except Exception as e:
             print(str(e) + f" in {sample}.html")
             continue

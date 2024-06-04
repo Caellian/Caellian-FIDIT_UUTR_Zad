@@ -1,0 +1,29 @@
+name: Generate data
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v1
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.12
+      - name: Install pipenv
+        run: pip install pipenv
+      - name: Download LFS files
+        run: git lfs fetch --all
+      - name: Run processing
+        run: |
+          pipenv install
+          pipenv run python ./work.py
+      - name: Bundle artifacts
+        run: ./pack.sh
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: generated-data
+          path: out/*
