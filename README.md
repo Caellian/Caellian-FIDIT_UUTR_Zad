@@ -35,16 +35,7 @@ Podaci su spremljeni u `json`, `csv`, `xlsx` i `pkl` formatima.
 
 ## Bilješke o izlučivanju podataka
 
-npr. _U nekim radovima nije bilo moguće izlučiti podnaslove jer se ne razlikuju od ostatka teksta._
-
 # Upute
-
-5. Predati:
-   - **Kod s pripadnom dokumentacijom, preporuka je Python notebook** (.ipynb)
-   - **Dokumentacija** (5.)
-   - **Rezultati izlučivanja** - .csv, .json, ... datoteke
-
----
 
 > Komentari:
 >

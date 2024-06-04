@@ -216,9 +216,12 @@ def handle_sample(path, soup):
     # šteta apstrakcije kada postoje ovakve stvari
     try:
         dates = find_dates(soup)
-        document.loc[key, "received"] = dates["received"]
-        document.loc[key, "accepted"] = dates["accepted"]
-        document.loc[key, "published"] = dates["published"]
+        if "received" in dates:
+            document.loc[key, "received"] = dates["received"]
+        if "accepted" in dates:
+            document.loc[key, "accepted"] = dates["accepted"]
+        if "published" in dates:
+            document.loc[key, "published"] = dates["published"]
     except Exception as e:
         print(f"Can't handle 'dates' in {key}.pdf.html: ", e)
 
