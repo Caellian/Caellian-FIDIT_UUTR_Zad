@@ -35,23 +35,6 @@ Podaci su spremljeni u `json`, `csv`, `xlsx` i `pkl` formatima.
 
 ## Bilješke o izlučivanju podataka
 
-# Upute
-
-> Komentari:
->
-> > Ideja je tekst očuvati što konzistentnijim.
-> >
-> > Česti problemi sa ekstrakcijom:
-
-| Problem Description                                            | Example/Explanation                                                                                                                                                                              |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Text data missing due to unexpected font size/style            | Where $2$ and $two$ always makes up five.<br />**Where and always makes up five.** <br /> ... original BERT<sub>BASE</sub> model with ... <br /> **... original BERT model with ...**            |
-| Wrong ordering of paragraphs                                   | Layout algorithm heuristics give wrong conclusions based on distance, e.g. bottom right paragraph is "closer" to top right paragraph then to the top left paragraph due to a figure/table/graph. |
-| Page numbering or similar information abrupt paragraph content | For navigation through HTML files, we used BeautifulSoup library. <br /> **For navigation through HTML files, we PAGE 5 AUTHOR ET AL. used BeautifulSoup library.**                              |
-| Wrong word ordering due to justification                       | Nature &nbsp; &nbsp; &nbsp; climate <br /> change <br /> **Nature change climate**                                                                                                               |
-| Problems with wrong symbol extraction (Ligatures)              | ... far-reaching effects on global ecosystems ... <br /> **... far-reaching eﬀects on global ecosystems ...**                                                                                    |
-| First line of paragraph missing                                |                                                                                                                                                                                                  |
-
 > > Primjer bilješki o izlučivanju:
 
 ````markdown
