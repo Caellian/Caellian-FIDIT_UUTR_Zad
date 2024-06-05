@@ -14,8 +14,6 @@ jobs:
           python-version: 3.12
       - name: Install pipenv
         run: pip install pipenv
-      - name: Download LFS files
-        run: git lfs fetch --all
       - name: Download Python dependencies
         run: pipenv install
       - name: Run processing
