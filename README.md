@@ -22,8 +22,11 @@ Kao izvor podataka je korišten skup časopisa [`Climate Dynamics (2021)`](https
 - pandas (`pandas`)
 - python std lib
 
-### Utilties
+### Utilities
 
+- PyPDF2
+  - za popravak "potrganih" PDFova
+  - CI javlja grešku da su "/Root" dokumenta ne postoji (ne lokalno)
 - psutil (`psutil`)
   - broj fizičkih jezgri procesora
 

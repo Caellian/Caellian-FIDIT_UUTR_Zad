@@ -3,6 +3,8 @@
 import camelot
 import pandas as pd
 
+import PyPDF2
+from pdfminer.pdfparser import PDFSyntaxError
 from pdfminer.high_level import extract_text_to_fp
 from pdfminer.layout import LAParams  # Podešavanje parametara
 from bs4 import BeautifulSoup
@@ -65,14 +67,33 @@ def preprocess_soup(soup):
     return soup
 
 
+def repaired_pdf(path):
+    # https://github.com/pdfminer/pdfminer.six/issues/476
+    repaired_filename = f"{path.replace('.pdf', '_repaired.pdf')}"
+
+    with open(path, "rb") as file:
+        reader = PyPDF2.PdfReader(file)
+        # Create a new PDF
+        with open(repaired_filename, "wb") as new_file:
+            writer = PyPDF2.PdfWriter()
+
+            # Copy content from old to new
+            for i in range(len(reader.pages)):
+                writer.add_page(reader.pages[i])
+
+            writer.write(new_file)
+    return repaired_filename
+
+
 def pdf_soup(path):
     # Pretvorba iz PDFa u HTML pa u BS4 je dosta skupa, tako da pohranjujem
     # rezultate obrade za bržu iteraciju
 
     if not Path(path + ".html").is_file():
         print(f"Parsing {path} ... (not cached)")
-        with open(path, "rb") as fin:
-            output_string = StringIO()
+        output_string = StringIO()
+        try:
+            fin = open(path, "rb")
             extract_text_to_fp(
                 fin,
                 output_string,
@@ -80,14 +101,29 @@ def pdf_soup(path):
                 output_type="html",
                 codec=None,
             )
+        except PDFSyntaxError as err:
+            print(f"Error parsing '{path}': ", err)
+            print(f"Trying to repair '{path}' PDF...")
 
-            soup = BeautifulSoup(output_string.getvalue(), "html.parser")
-            print(f"Preprocessing {path} ...")
-            soup = preprocess_soup(soup)
-            with open(path + ".html", "w") as fout:
-                fout.write(soup.prettify())
-            print("Done")
-            return soup
+            fin = open(repaired_pdf(path), "rb")
+            extract_text_to_fp(
+                fin,
+                output_string,
+                laparams=LAParams(),
+                output_type="html",
+                codec=None,
+            )
+            return None
+        finally:
+            fin.close()
+
+        soup = BeautifulSoup(output_string.getvalue(), "html.parser")
+        print(f"Preprocessing {path} ...")
+        soup = preprocess_soup(soup)
+        with open(path + ".html", "w") as fout:
+            fout.write(soup.prettify())
+        print("Done")
+        return soup
 
     else:
         print(f"Loading cached {path}.html ...")
