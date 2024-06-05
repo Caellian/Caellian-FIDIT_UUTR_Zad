@@ -257,7 +257,7 @@ def handle_sample(path):
     try:
         if Path(f"./out/{key}.gen.csv").is_file():
             print(f"Skipping {key} (already processed)")
-            return None
+            return (key, None)
 
         document = pd.DataFrame(
             columns=["title", "authors", "received", "accepted", "published"]
@@ -281,7 +281,7 @@ def handle_sample(path):
         return (key, document)
     except Exception as e:
         print(f"{key} failed: ", e)
-        return None
+        return (key, None)
 
 
 # Dozvoljava podešavanje parametara kroz environment variables
