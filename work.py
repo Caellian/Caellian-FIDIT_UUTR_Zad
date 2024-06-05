@@ -6,6 +6,7 @@ import pandas as pd
 from pdfminer.high_level import extract_text_to_fp
 from pdfminer.layout import LAParams  # Podešavanje parametara
 from bs4 import BeautifulSoup
+import psutil
 
 # python std lib
 import os
@@ -16,7 +17,7 @@ import re
 import pickle
 from datetime import datetime
 import sys
-from multiprocessing import Process
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
 # sys.setrecursionlimit(8000)
 
@@ -81,7 +82,7 @@ def pdf_soup(path):
             )
 
             soup = BeautifulSoup(output_string.getvalue(), "html.parser")
-            print("Preprocessing...")
+            print(f"Preprocessing {path} ...")
             soup = preprocess_soup(soup)
             with open(path + ".html", "w") as fout:
                 fout.write(soup.prettify())
@@ -148,8 +149,7 @@ def parse_dates(content):
             phase = "accepted"
         elif c.startswith("Published"):
             phase = "published"
-        date = datetime.strptime(c.split(":", 1)[1].strip(), "%d %B %Y")
-        result[phase] = date.isoformat()
+        result[phase] = c.split(":", 1)[1].strip()
 
     return result
 
@@ -202,47 +202,61 @@ def apply_frame_cells(frame, key, soup, cell_map):
         apply_frame_cell(frame, key, soup, k, v)
 
 
-def handle_sample(path, soup):
+def handle_sample(path):
     """Obrađuje jedan PDF dokument i vraća rezultate u obliku dictionarya"""
-    document = pd.DataFrame(
-        columns=["title", "authors", "received", "accepted", "published"]
-    )
-
+    soup = pdf_soup(path)
     key = os.path.splitext(os.path.basename(path))[0]
 
-    apply_frame_cells(
-        document, key, soup, {"title": find_title, "authors": find_authors}
-    )
-    # šteta apstrakcije kada postoje ovakve stvari
     try:
-        dates = find_dates(soup)
-        document.loc[key, "received"] = dates["received"]
-        document.loc[key, "accepted"] = dates["accepted"]
-        document.loc[key, "published"] = dates["published"]
-    except Exception as e:
-        print(f"Can't handle 'dates' in {key}.pdf.html: ", e)
+        if Path(f"./out/{key}.gen.csv").is_file():
+            print(f"Skipping {key} (already processed)")
+            return None
 
-    return document
+        document = pd.DataFrame(
+            columns=["title", "authors", "received", "accepted", "published"]
+        )
+
+        apply_frame_cells(
+            document, key, soup, {"title": find_title, "authors": find_authors}
+        )
+        # šteta apstrakcije kada postoje ovakve stvari
+        try:
+            dates = find_dates(soup)
+            document.loc[key, "received"] = dates["received"]
+            document.loc[key, "accepted"] = dates["accepted"]
+            document.loc[key, "published"] = dates["published"]
+        except Exception as e:
+            print(f"Can't handle 'dates' in {key}.pdf.html: ", e)
+
+        return (key, document)
+    except Exception as e:
+        print(f"{key} failed: ", e)
+        return None
+
+
+OUT_DIR = os.environ.get("OUT_DIR", "./out")
+IN_DIR = os.environ.get("IN_DIR", "./data")
+
+WORKER_COUNT = os.environ.get("WORKER_COUNT", psutil.cpu_count(logical=False))
 
 
 def run():
-    for sample in glob.glob("./data/*.pdf"):
-        # sekvencijalno obrađujemo uzorke jer su pohranjeni na HDDu, a i možda
-        # budu zahtjevali previše radne memorije
-        try:
-            soup = pdf_soup(sample)
-            document = handle_sample(sample, soup)
+    os.makedirs(OUT_DIR, exist_ok=True)
+    tasks = glob.iglob(os.path.join(IN_DIR, "*.pdf"))
 
-            base_name = os.path.splitext(os.path.basename(sample))[0]
-            os.makedirs("./out", exist_ok=True)
-
-            document.to_csv("./out/" + base_name + ".gen.csv")
-            document.to_json("./out/" + base_name + ".gen.json")
-            document.to_excel("./out/" + base_name + ".gen.xlsx")
-            document.to_pickle("./out/" + base_name + ".gen.pkl")
-        except Exception as e:
-            print(str(e) + f" in {sample}.html")
-            continue
+    # obrada zadataka u batchevima veličine WORKER_COUNT
+    with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
+        documents = executor.map(
+            handle_sample,
+            tasks,
+        )
+        for name, doc in filter(
+            lambda it: it is not None, map(lambda it: it.result(), documents)
+        ):
+            doc.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
+            doc.to_json(os.path.join(OUT_DIR, name + ".gen.json"))
+            doc.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
+            doc.to_pickle(os.path.join(OUT_DIR, name + ".gen.pkl"))
 
 
 if __name__ == "__main__":

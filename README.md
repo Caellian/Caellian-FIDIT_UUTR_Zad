@@ -22,6 +22,11 @@ Kao izvor podataka je korišten skup časopisa [`Climate Dynamics (2021)`](https
 - pandas (`pandas`)
 - python std lib
 
+### Utilties
+
+- psutil (`psutil`)
+  - broj fizičkih jezgri procesora
+
 ### Radno okruženje
 
 - pipenv (pip + virtualenv)
@@ -32,3 +37,7 @@ Kao izvor podataka je korišten skup časopisa [`Climate Dynamics (2021)`](https
 ## Struktura spremljenih podataka
 
 Podaci su spremljeni u `json`, `csv`, `xlsx` i `pkl` formatima.
+
+## Korišteni materijali
+
+- 
