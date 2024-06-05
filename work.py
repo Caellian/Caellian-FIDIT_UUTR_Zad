@@ -19,7 +19,7 @@ import re
 import pickle
 from datetime import datetime
 import sys
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # sys.setrecursionlimit(8000)
 
@@ -282,17 +282,14 @@ def run():
 
     # obrada zadataka u batchevima veličine WORKER_COUNT
     with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
-        documents = executor.map(
-            handle_sample,
-            tasks,
-        )
-        for name, doc in filter(
-            lambda it: it is not None, map(lambda it: it.result(), documents)
-        ):
-            doc.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
-            doc.to_json(os.path.join(OUT_DIR, name + ".gen.json"))
-            doc.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
-            doc.to_pickle(os.path.join(OUT_DIR, name + ".gen.pkl"))
+        futures = {executor.submit(handle_sample, task): task for task in tasks}
+        for future in as_completed(futures):
+            name, doc = future.result()
+            if doc is not None:
+                doc.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
+                doc.to_json(os.path.join(OUT_DIR, name + ".gen.json"))
+                doc.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
+                doc.to_pickle(os.path.join(OUT_DIR, name + ".gen.pkl"))
 
 
 if __name__ == "__main__":
