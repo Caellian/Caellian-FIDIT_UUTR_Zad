@@ -20,15 +20,29 @@ import pickle
 from datetime import datetime
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import traceback
+from types import SimpleNamespace
 
 # sys.setrecursionlimit(8000)
 
 DEBUG = True
 
+# Dozvoljava podešavanje parametara kroz environment variables
+OUT_DIR = os.environ.get("OUT_DIR", "./out")
+IN_DIR = os.environ.get("IN_DIR", "./data")
+
+WORKER_COUNT = os.environ.get("WORKER_COUNT", psutil.cpu_count(logical=False))
+# Možemo koristiti i argparse pa postaviti os.environ vrijednosti, no nije bitno
+# za ovaj zadatak
+
+
+class InsufficientParser(Exception):
+    pass
+
 
 def map_style_val(name, value):
     """Ovisno o imenu CSS atributa mapira/čisti njegovu vrijednost"""
-    if name == "font-size":
+    if name in ["font-size", "top", "left", "width", "height"]:
         if value.endswith("px"):
             return value[:-2]
         else:
@@ -153,6 +167,10 @@ def pdf_soup(path):
             print("Done")
             return soup
 
+#################
+# UTIL FUNKCIJE #
+#################
+
 
 RE_WHITESPACE = re.compile(r"[\n\t\s]+")
 
@@ -171,6 +189,34 @@ def normalize_str(content):
     return RE_WHITESPACE.sub(" ", content.strip())
 
 
+def tag_rect(tag):
+    """
+    Vrati bounding rect {x, y, w, h} od elementa ili parenta.
+    Ako ne uspije, vrijednosti su None.
+    """
+    result = [None, None, None, None]
+
+    def tag_value(tag, name):
+        value = tag.get(name)
+        return value is not None and int(value) or None
+
+    while any(map(lambda it: it is None, result)):
+        result[0] = result[0] or tag_value(tag, "left")
+        result[1] = result[1] or tag_value(tag, "top")
+        result[2] = result[2] or tag_value(tag, "width")
+        result[3] = result[3] or tag_value(tag, "height")
+        tag = tag.parent
+        if tag is None:
+            break
+
+    return SimpleNamespace(x=result[0], y=result[1], w=result[2], h=result[3])
+
+
+###########
+# PARSERI #
+###########
+
+
 # RE_TITLE_FONT = re.compile(r"(Times|AdvPS|MyriadPro|STIX|MathPack|FranklinGothic)")
 
 # Podešava minimalnu veličinu fonta naslova; obično se samo page# nalazi prije
@@ -178,7 +224,7 @@ MIN_TITLE_FONT_SIZE = 15
 
 
 def is_title(tag):
-    if not tag.name == "span":
+    if not tag.name == "span" or tag.get("page") != "1":
         return False
 
     size = tag.get("font-size")
@@ -193,11 +239,11 @@ def is_title(tag):
     return True
 
 
-def find_title(soup):
+def find_title(soup, context):
     els = soup.find(is_title)
     if els is not None:
         return normalize_str(els.text)
-    raise Exception("Title not found")
+    raise InsufficientParser("Title not found")
 
 
 # https://util.unicode.org/UnicodeJsps/list-unicodeset.jsp?a=[%3Aupper%3A]&abb=on&ucd=on&esc=on
@@ -213,8 +259,12 @@ RE_AUTHOR_NAME = re.compile(
 RE_AUTHOR_SEP = re.compile(r"(\d+,\s+)*\d+")
 
 
-def is_namelike(tag):
-    if not tag.name == "span":
+def is_namelike(tag, date_start):
+    if not tag.name == "span" or tag.get("page") != "1":
+        return False
+
+    # autori su uvijek navedeni prije datuma objave
+    if tag_rect(tag).y > date_start:
         return False
 
     content = tag.text.strip()
@@ -226,26 +276,23 @@ def is_namelike(tag):
 
 def is_author_separator(tag):
     if not tag.name == "span":
-        print("Not span: ", tag)
         return False
 
     content = tag.text.strip()
     if content in "\u2019\u00b7":
         return True
 
-    print("Chacking numns: ", content)
     return RE_AUTHOR_SEP.match(content)
 
 
-def find_authors(soup):
+def find_authors(soup, context):
     result = []
 
-    name_candidates = soup.find_all(is_namelike)[:10]
+    name_candidates = soup.find_all(lambda t: is_namelike(t, context["date-start"]))
     prev_was_name = False
     for c in name_candidates:
         name = normalize_str(c.text)
         next_tag = c.next_sibling
-        print("Name: ", name, "Next tag: ", is_author_separator(next_tag))
         is_certain = next_tag is not None and is_author_separator(next_tag)
         if is_certain or prev_was_name:
             result.append(name)
@@ -253,8 +300,7 @@ def find_authors(soup):
         else:
             prev_was_name = False
 
-    print("Authors: ", result)
-    raise Exception("Author not found")
+    raise InsufficientParser("Author not found")
 
 
 def parse_dates(content):
@@ -293,33 +339,46 @@ DATE_KEYWORDS = [
 ]
 
 
-def find_dates(soup):
-    for span in soup.find_all("span"):
+def find_dates(soup, context):
+    for span in soup.find_all("span", {"page": "1"}):
         content = span.text
         for kw in DATE_KEYWORDS:
             if kw in content.lower():
+                context["date-start"] = tag_rect(span).y
                 line = next(filter(lambda it: kw in it.lower(), content.split("\n")))
                 return parse_dates(line)
-    raise Exception("Dates not found")
-
-
-def apply_frame_cell(frame, key, soup, name, f):
-    """
-    Aplikator funkcije f na frame[key, name], koji javi pogrešku ako f ne
-    uspije.
-    """
-    try:
-        frame.loc[key, name] = f(soup)
-    except Exception as e:
-        print(f"Can't handle '{name}' in {key}.pdf.html: ", e)
+    raise InsufficientParser("Dates not found")
 
 
 def apply_frame_cells(frame, key, soup, cell_map):
     """
     apply_frame_cell samo radi na skupu parova imena i parsera
     """
-    for k, v in cell_map.items():
-        apply_frame_cell(frame, key, soup, k, v)
+
+
+PARSERS = {
+    "title": find_title,
+    ("received", "accepted", "published"): find_dates,
+    "authors": find_authors,
+}
+
+
+def parser_keys(rem=list(PARSERS.keys())):
+    if len(rem) == 0:
+        return
+
+    current = rem[0]
+    rem = rem[1:]
+
+    if type(current) is tuple:
+        current = list(current)
+        rem = current[1:] + rem
+        current = current[0]
+    yield current
+
+    if len(rem) == 0:
+        return
+    yield from parser_keys(rem)
 
 
 def handle_sample(path):
@@ -328,48 +387,53 @@ def handle_sample(path):
     key = os.path.splitext(os.path.basename(path))[0]
 
     try:
-        if Path(f"./out/{key}.gen.csv").is_file():
+        if Path(os.path.join(OUT_DIR, f"{key}.gen.csv")).is_file():
             print(f"Skipping {key} (already processed)")
             return (key, None)
 
-        document = pd.DataFrame(
-            columns=["title", "authors", "received", "accepted", "published"]
-        )
+        document = pd.DataFrame(columns=[field for field in parser_keys()])
 
         # ovdje je isto dobro mjesto za branchanje i paralelnu obradu, no već
         # smo iskoristili sve fizičke coreove branchanjem na osnovu ulaznih
         # datoteka
-        apply_frame_cells(
-            document, key, soup, {"title": find_title, "authors": find_authors}
-        )
-        # šteta apstrakcije kada postoje ovakve stvari
-        try:
-            dates = find_dates(soup)
-            document.loc[key, "received"] = dates["received"]
-            document.loc[key, "accepted"] = dates["accepted"]
-            document.loc[key, "published"] = dates["published"]
-        except Exception as e:
-            print(f"Can't handle 'dates' in {key}.pdf.html: ", e)
+        context = {}
+
+        for name, f in PARSERS.items():
+            try:
+                if type(name) is str:
+                    document.loc[key, name] = f(soup, context)
+                elif type(name) is tuple:
+                    result = f(soup, context)
+                    for entry in list(name):
+                        document.loc[key, entry] = result[entry]
+            except InsufficientParser:
+                print(f"Can't find '{name}' in {key}.pdf.html")
+            except Exception:
+                print(f"Error handling '{name}' in {key}.pdf.html:")
+                print(traceback.format_exc())
 
         return (key, document)
-    except Exception as e:
-        print(f"{key} failed: ", e)
+    except Exception:
+        print(f"{key} failed:")
+        print(traceback.format_exc())
         return (key, None)
-
-
-# Dozvoljava podešavanje parametara kroz environment variables
-OUT_DIR = os.environ.get("OUT_DIR", "./out")
-IN_DIR = os.environ.get("IN_DIR", "./data")
-
-WORKER_COUNT = os.environ.get("WORKER_COUNT", psutil.cpu_count(logical=False))
-# Možemo koristiti i argparse pa postaviti os.environ vrijednosti, no nije bitno
-# za ovaj zadatak
 
 
 def test_specific(files):
     os.makedirs(OUT_DIR, exist_ok=True)
     for file in files:
-        handle_sample(file)
+        checked = os.path.join(
+            OUT_DIR, os.path.splitext(os.path.basename(file))[0] + ".gen.csv"
+        )
+        if Path(checked).is_file():
+            os.remove(checked)
+        name, doc = handle_sample(file)
+
+        if doc is not None:
+            doc.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
+            doc.to_json(os.path.join(OUT_DIR, name + ".gen.json"))
+            doc.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
+            doc.to_pickle(os.path.join(OUT_DIR, name + ".gen.pkl"))
 
 
 def run():
