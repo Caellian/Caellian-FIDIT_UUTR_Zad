@@ -40,6 +40,22 @@ Podaci su spremljeni u `json`, `csv`, `xlsx` i `pkl` formatima.
 
 ## Korišteni materijali
 
+- Stack Overflow
+  - Sve od najjednostavnijih stvari poput "bs4 check if attribute exists" do
+    "how to parallelize a loop"
+- Bing Copilot
+  - Kada nisam bio siguran kako formulirati search query za tražilicu (tj. nisam
+    dobivao rezultate)
+  - Nisam generirao ni jednu cijelu funkciju njime jer mi je lakše debuggat
+    svoje pogreške.
+- Cody (mislim da koristi Claude 3 Opus)
+  - Autocompletion na osnovu postojećeg koda i neke sitnice da ne tražim osnovne
+    stvari poput `os.path.join` (jer ne koristim Python puno; a ne pamtim dobro
+    stdlib jezika ako ih aktivno ne koristim)
+
+Vjerujem da je to razumna razina oslanjanja na LLMove jer nadomještava "kopanje
+po internetu".
+
 ## Licenca/License
 
 Kod u repozitoriju je licenciran terenarnom Apache 2.0/zlib/MIT, koristite
