@@ -14,13 +14,16 @@ jobs:
           python-version: 3.12
       - name: Install pipenv
         run: pip install pipenv
-      - name: Download Python dependencies
-        run: pipenv install
+      - name: Enter pipenv shell
+        run: |
+          pipenv sync
+          pipenv shell
+
       - name: Run processing
-        run: pipenv run python ./work.py
-      - name: Bundle artifacts
-        run: ./pack.sh
+        run: python ./work.py
+
       - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v1
         with:
           name: generated-data

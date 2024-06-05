@@ -52,7 +52,9 @@ def style_kv_obj(style):
     }
 
 
-# preprocessam da daljnji style string searchevi imaju bolje performanse
+# preprocessanje da daljnji style string searchevi imaju bolje performanse
+# inlinea style atribute na HTML tagove samo, no može se dodati još obrade tu
+# poput odjeljivanja stranica i sl.
 def preprocess_soup(soup):
     """Obrađuje BS4 objekte kako bi bili pogodniji za obradu"""
     for tag in soup.recursiveChildGenerator():
@@ -68,6 +70,9 @@ def preprocess_soup(soup):
 
 
 def repaired_pdf(path):
+    """
+    Pokušava popraviti dani PDF dokument i vraća putanju na popravljeni file.
+    """
     # https://github.com/pdfminer/pdfminer.six/issues/476
     repaired_filename = f"{path.replace('.pdf', '_repaired.pdf')}"
 
@@ -86,6 +91,12 @@ def repaired_pdf(path):
 
 
 def pdf_soup(path):
+    """
+    Učitava PDF dokument u BS4 objekte, provodeći preprocessanje ako je
+    potrebno.
+
+    Također popravlja PDF ako se nije uspješno otvorio.
+    """
     # Pretvorba iz PDFa u HTML pa u BS4 je dosta skupa, tako da pohranjujem
     # rezultate obrade za bržu iteraciju
 
@@ -239,7 +250,7 @@ def apply_frame_cells(frame, key, soup, cell_map):
 
 
 def handle_sample(path):
-    """Obrađuje jedan PDF dokument i vraća rezultate u obliku dictionarya"""
+    """Obrađuje jedan PDF dokument i vraća rezultate u obliku DataFramea"""
     soup = pdf_soup(path)
     key = os.path.splitext(os.path.basename(path))[0]
 
@@ -252,6 +263,9 @@ def handle_sample(path):
             columns=["title", "authors", "received", "accepted", "published"]
         )
 
+        # ovdje je isto dobro mjesto za branchanje i paralelnu obradu, no već
+        # smo iskoristili sve fizičke coreove branchanjem na osnovu ulaznih
+        # datoteka
         apply_frame_cells(
             document, key, soup, {"title": find_title, "authors": find_authors}
         )
@@ -270,10 +284,13 @@ def handle_sample(path):
         return None
 
 
+# Dozvoljava podešavanje parametara kroz environment variables
 OUT_DIR = os.environ.get("OUT_DIR", "./out")
 IN_DIR = os.environ.get("IN_DIR", "./data")
 
 WORKER_COUNT = os.environ.get("WORKER_COUNT", psutil.cpu_count(logical=False))
+# Možemo koristiti i argparse pa postaviti os.environ vrijednosti, no nije bitno
+# za ovaj zadatak
 
 
 def run():

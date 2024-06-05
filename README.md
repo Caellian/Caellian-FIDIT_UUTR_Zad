@@ -1,12 +1,9 @@
 # Praktični zadatak
-
-Kolegij: **Uvod u teorijsko računarstvo**
-
-Nositelj predmeta: Prof. dr. sc. Sanda Martinčić-Ipšić
-
-Asistent: Andrija Poleksić, mag. inf.
-
-Autor koda: Tin Švagelj
+|||
+|-:|:-:|
+|Kolegij|**Uvod u teorijsko računarstvo**|
+|Nositelj predmeta|Prof. dr. sc. Sanda Martinčić-Ipšić|
+|Asistent|Andrija Poleksić, mag. inf.|
 
 ## Izvor podataka
 
@@ -18,6 +15,8 @@ Kao izvor podataka je korišten skup časopisa [`Climate Dynamics (2021)`](https
 - pdfminer (`pdfminer.six`)
 - camelot (`camelot`)
 - pandas (`pandas`)
+- openpyxl (`openpyxl`)
+  - podržka za `xlsx` format
 - python std lib
 
 ### Utilities

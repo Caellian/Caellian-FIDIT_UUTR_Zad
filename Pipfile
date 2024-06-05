@@ -11,6 +11,7 @@ pandas = "*"
 numpy = "*"
 psutil = "*"
 pypdf2 = "*"
+openpyxl = "*"
 
 [dev-packages]
 
