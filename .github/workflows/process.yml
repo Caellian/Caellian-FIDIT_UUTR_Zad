@@ -16,10 +16,10 @@ jobs:
         run: pip install pipenv
       - name: Download LFS files
         run: git lfs fetch --all
+      - name: Download Python dependencies
+        run: pipenv install
       - name: Run processing
-        run: |
-          pipenv install
-          pipenv run python ./work.py
+        run: pipenv run python ./work.py
       - name: Bundle artifacts
         run: ./pack.sh
       - name: Upload artifacts
