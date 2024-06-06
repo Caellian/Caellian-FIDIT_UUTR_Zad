@@ -8,3 +8,5 @@ for f in $(ls ./data/*); do
         rm $f
     fi
 done
+
+rm -r ./out

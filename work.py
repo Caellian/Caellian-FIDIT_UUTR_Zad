@@ -367,6 +367,40 @@ PARSERS = {
 # IZVOĐAČI #
 ############
 
+def store_recursive(frame, structured, row, parser_name, name, value, table_only=False):
+    # pandas.json_normalize ne odvaja vrijednosti u listama, a ovako možemo
+    # dodati podršku i za filtriranje i neke dodatne gluposti kako nam padnu na
+    # pamet
+
+    if value is None:
+        return
+
+    if type(value) is tuple:
+        value = list(value)
+    
+    if type(value) is list:
+        assert type(name) is str, f"can't crossproduct {type(name)} typed name and {type(value)} indices"
+        frame.loc[row, name + ".length"] = int(len(value))
+        for i, entry in enumerate(value):
+            store_recursive(frame, structured, row, parser_name, f"{name}.{i}", entry, True)
+        if not table_only:
+            structured[name] = value
+    elif type(value) is dict:
+        if type(name) is tuple:
+            for entry in list(name):
+                store_recursive(frame, structured, row, parser_name, f"{name}.{entry}", value.get(entry, None), True)
+                structured[entry] = value.get(entry, None)
+        else:
+            assert type(name) is str, f"'{str(parser_name)}' parser requires string key"
+            for entry in value:
+                store_recursive(frame, structured, row, parser_name, f"{name}.{entry}", value.get(entry, None), True)
+            structured[name] = value
+    elif type(name) is str:
+        frame.loc[row, name] = value
+        structured[name] = value
+    else:
+        raise Exception(f"can't store '{str(parser_name)}' parser result to non-str '{name}' column")
+
 def handle_sample(path):
     """Obrađuje jedan PDF dokument i vraća rezultate u obliku DataFramea"""
     soup = pdf_soup(path)
@@ -388,25 +422,7 @@ def handle_sample(path):
         for name, f in PARSERS.items():
             parser_name = f.__name__
             try:
-                result = f(soup, context)
-                
-                if type(result) is list:
-                    assert type(name) is str, f"can't crossproduct {type(name)} typed name and list indices"
-                    frame.loc[key, name + "_count"] = int(len(result))
-                    for i, entry in enumerate(result):
-                        frame.loc[key, f"{name}_{i}"] = entry
-                    structured[name] = result
-                elif type(result) is dict:
-                    if type(name) is tuple:
-                        for entry in list(name):
-                            frame.loc[key, entry] = result.get(entry, None)
-                            structured[entry] = result.get(entry, None)
-                    else:
-                        assert type(name) is str, f"'{str(parser_name)}' parser requires string key"
-                        structured[name] = result
-                elif type(name) is str:
-                    frame.loc[key, name] = result
-                    structured[name] = result
+                store_recursive(frame, structured, key, parser_name, name, f(soup, context))
             except InsufficientParser:
                 print(f"Can't find '{parser_name}' value in {os.path.join(IN_DIR, key)}.pdf.html")
             except Exception:
