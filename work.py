@@ -406,15 +406,18 @@ def store_recursive(frame, structured, row, parser_name, name, value, table_only
         if type(name) is tuple:
             for entry in list(name):
                 store_recursive(frame, structured, row, parser_name, entry, value.get(entry, None), True, separator)
-                structured[entry] = value.get(entry, None)
+                if not table_only:
+                    structured[entry] = value.get(entry, None)
         else:
             assert type(name) is str, f"'{str(parser_name)}' parser requires string key"
             for entry in value:
                 store_recursive(frame, structured, row, parser_name, f"{name}{separator}{entry}", value.get(entry, None), True, separator)
-            structured[name] = value
+            if not table_only:
+                structured[name] = value
     elif type(name) is str:
         frame.loc[row, name] = value
-        structured[name] = value
+        if not table_only:
+            structured[name] = value
     else:
         raise Exception(f"can't store '{str(parser_name)}' parser result to non-str '{name}' column")
 
@@ -429,7 +432,9 @@ def handle_sample(path):
             return (key, None, None)
 
         frame = pd.DataFrame()
-        structured = {}
+        structured = {
+            "document": key + ".pdf"
+        }
 
         # ovdje je isto dobro mjesto za branchanje i paralelnu obradu, no već
         # smo iskoristili sve fizičke coreove branchanjem na osnovu ulaznih
@@ -479,7 +484,6 @@ def run():
     tasks = glob.iglob(os.path.join(IN_DIR, "*.pdf"))
 
     frames = []
-    data = []
 
     # obrada zadataka u batchevima veličine WORKER_COUNT
     with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
@@ -487,31 +491,55 @@ def run():
         for future in as_completed(futures):
             name, frame, structured = future.result()
 
+            base_path = os.path.join(OUT_DIR, name)
             if frame is not None:
-                frames.append(frame)
-                frame.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
-                frame.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
+                frames.append(base_path)
+                frame.to_csv(base_path + ".gen.csv")
+                frame.to_excel(base_path + ".gen.xlsx")
             if structured is not None:
-                data.append(structured)
-                with open(os.path.join(OUT_DIR, name + ".gen.json"), "w") as json_file:
+                with open(base_path + ".gen.json", "w") as json_file:
                     json.dump(structured, json_file)
-                with open(os.path.join(OUT_DIR, name + ".gen.pickle"), "wb") as pkl_file:
+                with open(base_path + ".gen.pickle", "wb") as pkl_file:
                     pickle.dump(structured, pkl_file)
 
     if len(frames) <= 1:
         # sanity check, ne treba mergeat ništa jer se radi o jednom dokumentu
         return
     
-    frame = frames[0]
-    for it in frames[1:]:
-        frame = pd.merge(frame, it, how='outer')
-    frame.to_csv(os.path.join(OUT_DIR, "merged.gen.csv"))
-    frame.to_excel(os.path.join(OUT_DIR, "merged.gen.xlsx"))
+    base_path = os.path.join(OUT_DIR, "merged")
 
-    with open(os.path.join(OUT_DIR, "merged.gen.json"), "w") as json_file:
-        json.dump(data, json_file)
-    with open(os.path.join(OUT_DIR, "merged.gen.pickle"), "wb") as pkl_file:
-        pickle.dump(data, pkl_file)
+    with open(base_path + ".json", "w") as json_file:
+        json_file.write("[")
+        if len(frames) > 1:
+            for path in frames[:-1]:
+                with open(path + ".gen.json", 'r') as it:
+                    json_file.write(it.read())
+                    json_file.write(", ")
+        with open(frames[-1] + ".gen.json", 'r') as it:
+            json_file.write(it.read())
+        json_file.write("]")
+
+    try:
+        frame = pd.DataFrame()
+        for path in frames:
+            it = pd.read_csv(path + ".gen.csv")
+            frame = pd.concat([frame, it], sort=False)
+        frame.to_csv(base_path + ".csv")
+        frame.to_excel(base_path + ".xlsx")
+    except MemoryError:
+        print("Can't generate merged csv & xlsx file - data too large to hold in memory")
+        return
+
+    try:
+        all_data = []
+        for path in frames:
+            with open(path + ".gen.pickle", 'rb') as it:
+                all_data.append(pickle.load(it))
+        with open(base_path + ".pickle", "wb") as pkl_file:
+            pickle.dump(all_data, pkl_file)
+    except MemoryError:
+        print("Can't generate merged pickle file - data too large to hold in memory")
+        return
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
