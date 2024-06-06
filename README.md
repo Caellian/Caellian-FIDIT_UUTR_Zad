@@ -42,7 +42,7 @@ Strukturirani formati koriste sljedeći format:
 ```json
 {
   "title": "Naslov publikacije",
-  "authors": [ ... popis imena autora ... ],
+  "authors": [ "Popis", "imena", "autora" ],
   "received": "Datum zaprimanja publikacije",
   "accepted": "Datum prihvaćanja publikacije",
   "published": "Datum objave publikacije",
@@ -53,6 +53,10 @@ Strukturirani formati koriste sljedeći format:
   ugježđenih podataka točkom od vrhovnih imena.
   - Liste u nestrukturiranim podacima se tretiraju kao strukture sa `length`
     ključem, a indeksi su umetnuti kao ugježđena komponenta.
+
+### Nedostaci
+
+- Imena autora nisu uvijek ispravna
 
 ## Korišteni materijali
 
