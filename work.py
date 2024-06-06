@@ -285,9 +285,11 @@ def find_title(soup, context):
 # treba paziti jer ovaj regex tehnički matcha bilo koju rečenicu koja sadrži
 # znakove koji mogu biti u imenu
 _RE_NAME_COMPONENT = r"[" + _RE_LETTER[1:-1] + _RE_MODIFIER[1:-1] + r"\." + _RE_DASH[1:-1] + r"]"
+_RE_PREFIX_SKIP = r"(,|\u00b7)" + _RE_SPACE + r"+"
 RE_AUTHOR_NAME = re.compile(
-    r"(?:(,|\u00b7)\s+)?((" + _RE_NAME_COMPONENT + r"+\s)+)"
+    r"(?:" + _RE_PREFIX_SKIP + r")?(" + _RE_NAME_COMPONENT + r"+(" + _RE_SPACE + _RE_NAME_COMPONENT + r"+" + r")+)"
 )
+RE_PREFIX_SKIP = re.compile( r"^" + _RE_PREFIX_SKIP)
 
 def is_namelike(tag, context):
     # autori su uvijek sadržani u spanu na prvoj stranici
@@ -319,10 +321,12 @@ def find_authors(soup, context):
         if c.text.strip() == "Æ":
             continue
         if len(name.groups()) >= 3:
-            result.append(normalize_str(name.group(2)))
-        else:
-            print(name)
-            print(len(name.groups()))
+            cleaned = c.text.strip()
+            pos = RE_PREFIX_SKIP.search(cleaned)
+            if pos is not None:
+                start, end = pos.span()
+                cleaned = cleaned[end:]
+            result.append(cleaned)
 
     if len(result) > 0:
         return result
@@ -522,7 +526,7 @@ def run():
     try:
         frame = pd.DataFrame()
         for path in frames:
-            it = pd.read_csv(path + ".gen.csv")
+            it = pd.read_csv(path + ".gen.csv", index_col=0)
             frame = pd.concat([frame, it], sort=False)
         frame.to_csv(base_path + ".csv")
         frame.to_excel(base_path + ".xlsx")
