@@ -17,6 +17,7 @@ from io import StringIO
 import glob
 import re
 import pickle
+import json
 from datetime import datetime
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -330,38 +331,28 @@ def parse_dates(content):
             phase = "accepted"
         elif c.startswith("Published"):
             phase = "published"
-        result[phase] = c.split(":", 1)[1].strip()
+        result[phase] = c.split(":")[1].strip()
 
     return result
 
 
 DATE_KEYWORDS = [
-    "received",
-    "accepted",
-    "published",
-    "january",
-    "february",
-    "march",
-    "april",
-    "may",
-    "june",
-    "july",
-    "august",
-    "september",
-    "october",
-    "november",
-    "december",
+    "received:",
+    "accepted:",
+    "published:",
+    "published online:",
 ]
 
 
 def find_dates(soup, context):
     for date in soup.find_all("span", {"page": "1"}):
-        content = date.text
-        for kw in DATE_KEYWORDS:
-            if kw in content.lower():
+        content = date.text.strip()
+        lowered = content.lower()
+        for begin in DATE_KEYWORDS:
+            if lowered.startswith(begin):
                 context["date-start"] = tag_value(date, "top", cast=int)
                 context["date-size"] = tag_value(date, "font-size", cast=int)
-                line = next(filter(lambda it: kw in it.lower(), content.split("\n")))
+                line = next(filter(lambda it: begin == it.lower()[:len(begin)], content.split("\n")))
                 return parse_dates(line)
     raise InsufficientParser("Dates not found")
 
@@ -384,9 +375,10 @@ def handle_sample(path):
     try:
         if Path(os.path.join(OUT_DIR, f"{key}.gen.csv")).is_file():
             print(f"Skipping {key} (already processed)")
-            return (key, None)
+            return (key, None, None)
 
-        document = pd.DataFrame()
+        frame = pd.DataFrame()
+        structured = {}
 
         # ovdje je isto dobro mjesto za branchanje i paralelnu obradu, no već
         # smo iskoristili sve fizičke coreove branchanjem na osnovu ulaznih
@@ -394,31 +386,38 @@ def handle_sample(path):
         context = {}
 
         for name, f in PARSERS.items():
+            parser_name = f.__name__
             try:
                 result = f(soup, context)
+                
                 if type(result) is list:
                     assert type(name) is str, f"can't crossproduct {type(name)} typed name and list indices"
-                    document.loc[key, name + "_count"] = int(len(result))
+                    frame.loc[key, name + "_count"] = int(len(result))
                     for i, entry in enumerate(result):
-                        document.loc[key, f"{name}_{i}"] = entry
-                elif type(result) is dict or type(name) is tuple:
-                    assert type(result) is dict, f"'{str(f.__name__)}' parser must return a dict"
-                    assert type(name) is tuple, f"'{str(f.__name__)}' parser requires tuple key"
-                    for entry in list(name):
-                        document.loc[key, entry] = result.get(entry, None)
+                        frame.loc[key, f"{name}_{i}"] = entry
+                    structured[name] = result
+                elif type(result) is dict:
+                    if type(name) is tuple:
+                        for entry in list(name):
+                            frame.loc[key, entry] = result.get(entry, None)
+                            structured[entry] = result.get(entry, None)
+                    else:
+                        assert type(name) is str, f"'{str(parser_name)}' parser requires string key"
+                        structured[name] = result
                 elif type(name) is str:
-                    document.loc[key, name] = result
+                    frame.loc[key, name] = result
+                    structured[name] = result
             except InsufficientParser:
-                print(f"Can't find '{name}' in {key}.pdf.html")
+                print(f"Can't find '{parser_name}' value in {os.path.join(IN_DIR, key)}.pdf.html")
             except Exception:
-                print(f"Error handling '{name}' in {key}.pdf.html:")
+                print(f"Error handling '{parser_name}' in {os.path.join(IN_DIR, key)}.pdf.html:")
                 print(traceback.format_exc())
 
-        return (key, document)
+        return (key, frame, structured)
     except Exception:
         print(f"{key} failed:")
         print(traceback.format_exc())
-        return (key, None)
+        return (key, None, None)
 
 
 def test_specific(files):
@@ -430,13 +429,16 @@ def test_specific(files):
         if Path(checked).is_file():
             # handle_sample ignorira input ako postoji csv output
             os.remove(checked)
-        name, doc = handle_sample(file)
+        name, frame, structured = handle_sample(file)
 
-        if doc is not None:
-            doc.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
-            doc.to_json(os.path.join(OUT_DIR, name + ".gen.json"))
-            doc.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
-            doc.to_pickle(os.path.join(OUT_DIR, name + ".gen.pkl"))
+        if frame is not None:
+            frame.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
+            frame.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
+        if structured is not None:
+            with open(os.path.join(OUT_DIR, name + ".gen.json"), "w") as json_file:
+                json.dump(structured, json_file)
+            with open(os.path.join(OUT_DIR, name + ".gen.pickle"), "wb") as pkl_file:
+                pickle.dump(structured, pkl_file)
 
 
 def run():
@@ -447,12 +449,16 @@ def run():
     with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
         futures = {executor.submit(handle_sample, task): task for task in tasks}
         for future in as_completed(futures):
-            name, doc = future.result()
-            if doc is not None:
-                doc.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
-                doc.to_json(os.path.join(OUT_DIR, name + ".gen.json"))
-                doc.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
-                doc.to_pickle(os.path.join(OUT_DIR, name + ".gen.pkl"))
+            name, frame, structured = future.result()
+
+            if frame is not None:
+                frame.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
+                frame.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
+            if structured is not None:
+                with open(os.path.join(OUT_DIR, name + ".gen.json"), "w") as json_file:
+                    json.dump(structured, json_file)
+                with open(os.path.join(OUT_DIR, name + ".gen.pickle"), "wb") as pkl_file:
+                    pickle.dump(structured, pkl_file)
 
 
 if __name__ == "__main__":
