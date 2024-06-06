@@ -367,10 +367,15 @@ PARSERS = {
 # IZVOĐAČI #
 ############
 
-def store_recursive(frame, structured, row, parser_name, name, value, table_only=False):
+def store_recursive(frame, structured, row, parser_name, name, value, table_only=False, separator="."):
+    """
+    Sprema `name`: `value` par u `frame` i `structured`, te ispravno podržava
+    liste, dictionaryje i dr. strukturirane podatke.
+    """
     # pandas.json_normalize ne odvaja vrijednosti u listama, a ovako možemo
     # dodati podršku i za filtriranje i neke dodatne gluposti kako nam padnu na
-    # pamet
+    # pamet.
+    # Jedino ne pazi na rekurzivne strukture, no njih ne koristimo.
 
     if value is None:
         return
@@ -380,20 +385,20 @@ def store_recursive(frame, structured, row, parser_name, name, value, table_only
     
     if type(value) is list:
         assert type(name) is str, f"can't crossproduct {type(name)} typed name and {type(value)} indices"
-        frame.loc[row, name + ".length"] = int(len(value))
+        frame.loc[row, name + f"{separator}length"] = int(len(value))
         for i, entry in enumerate(value):
-            store_recursive(frame, structured, row, parser_name, f"{name}.{i}", entry, True)
+            store_recursive(frame, structured, row, parser_name, f"{name}{separator}{i}", entry, True, separator)
         if not table_only:
             structured[name] = value
     elif type(value) is dict:
         if type(name) is tuple:
             for entry in list(name):
-                store_recursive(frame, structured, row, parser_name, f"{name}.{entry}", value.get(entry, None), True)
+                store_recursive(frame, structured, row, parser_name, entry, value.get(entry, None), True, separator)
                 structured[entry] = value.get(entry, None)
         else:
             assert type(name) is str, f"'{str(parser_name)}' parser requires string key"
             for entry in value:
-                store_recursive(frame, structured, row, parser_name, f"{name}.{entry}", value.get(entry, None), True)
+                store_recursive(frame, structured, row, parser_name, f"{name}{separator}{entry}", value.get(entry, None), True, separator)
             structured[name] = value
     elif type(name) is str:
         frame.loc[row, name] = value
