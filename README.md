@@ -38,6 +38,22 @@ Kao izvor podataka je korišten skup časopisa [`Climate Dynamics (2021)`](https
 
 Podaci su spremljeni u `json`, `csv`, `xlsx` i `pkl` formatima.
 
+Strukturirani formati koriste sljedeći format:
+```json
+{
+  "title": "Naslov publikacije",
+  "authors": [ ... popis imena autora ... ],
+  "received": "Datum zaprimanja publikacije",
+  "accepted": "Datum prihvaćanja publikacije",
+  "published": "Datum objave publikacije",
+}
+```
+
+- Nestrukturirani formati pohranjuju strukture tako što odvajaju imena
+  ugježđenih podataka točkom od vrhovnih imena.
+  - Liste u nestrukturiranim podacima se tretiraju kao strukture sa `length`
+    ključem, a indeksi su umetnuti kao ugježđena komponenta.
+
 ## Korišteni materijali
 
 - Stack Overflow

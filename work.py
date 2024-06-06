@@ -325,11 +325,12 @@ def parse_dates(content):
 
     for c in content:
         phase = "published"
-        if c.startswith("Received"):
+        c_lower = c.lower()
+        if c_lower.startswith("received"):
             phase = "received"
-        elif c.startswith("Accepted"):
+        elif c_lower.startswith("accepted"):
             phase = "accepted"
-        elif c.startswith("Published"):
+        elif c_lower.startswith("published"):
             phase = "published"
         result[phase] = c.split(":")[1].strip()
 
