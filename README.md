@@ -17,19 +17,18 @@ Kao izvor podataka je korišten skup časopisa [`Climate Dynamics (2021)`](https
 - pandas (`pandas`)
 - openpyxl (`openpyxl`)
   - podržka za `xlsx` format
+- PyPDF2 (`pypdf2`)
+  - za popravak "potrganih" PDFova
+- psutil (`psutil`)
+  - broj fizičkih jezgri procesora za idealnu paralelizaciju
 - python std lib
 
-### Utilities
-
-- PyPDF2
-  - za popravak "potrganih" PDFova
-  - CI javlja grešku da su "/Root" dokumenta ne postoji (ne lokalno)
-- psutil (`psutil`)
-  - broj fizičkih jezgri procesora
+Popis se može naći u [`Pipfile`](./Pipfile) datoteci (gornji nije nužno ažuran).
 
 ### Radno okruženje
 
-- pipenv (pip + virtualenv)
+- `pipenv` (pip + virtualenv)
+- `flake8` linter
 - VSCode (`code` + `code-marketplace` + `code-features-insiders`)
   - Python (Microsoft)
   - Cody
@@ -56,7 +55,11 @@ Strukturirani formati koriste sljedeći format:
 
 ### Nedostaci
 
-- Imena autora nisu uvijek ispravna
+- Tekst nije uvijek ispravan jer konverzija iz PDF formata ne očuva dijakritičke znakove (npr. `é` postane `e´`)
+  - Skripta podržava sve službene UNICODE simbole, u trenutku kada ekstrakcija
+    teksta prestane odvajati modifikatore slova od slova, regularni izrazi za
+    ekstrakciju informacija mogu biti precizniji. Radi se o ograničenju
+    formata/alata na koje se skripta oslanja.
 
 ## Korišteni materijali
 
