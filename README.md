@@ -11,6 +11,7 @@ Kao izvor podataka je korišten skup časopisa [`Climate Dynamics (2021)`](https
 
 ## Korišteni alati/biblioteke
 
+- **Python 3.12**
 - beautiful soup (`beautifulsoup4`)
 - pdfminer (`pdfminer.six`)
 - camelot (`camelot`)
@@ -21,7 +22,6 @@ Kao izvor podataka je korišten skup časopisa [`Climate Dynamics (2021)`](https
   - za popravak "potrganih" PDFova
 - psutil (`psutil`)
   - broj fizičkih jezgri procesora za idealnu paralelizaciju
-- python std lib
 
 Popis se može naći u [`Pipfile`](./Pipfile) datoteci (gornji nije nužno ažuran).
 

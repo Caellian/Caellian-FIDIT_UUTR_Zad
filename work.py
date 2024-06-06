@@ -478,6 +478,9 @@ def run():
     os.makedirs(OUT_DIR, exist_ok=True)
     tasks = glob.iglob(os.path.join(IN_DIR, "*.pdf"))
 
+    frames = []
+    data = []
+
     # obrada zadataka u batchevima veličine WORKER_COUNT
     with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
         futures = {executor.submit(handle_sample, task): task for task in tasks}
@@ -485,14 +488,30 @@ def run():
             name, frame, structured = future.result()
 
             if frame is not None:
+                frames.append(frame)
                 frame.to_csv(os.path.join(OUT_DIR, name + ".gen.csv"))
                 frame.to_excel(os.path.join(OUT_DIR, name + ".gen.xlsx"))
             if structured is not None:
+                data.append(structured)
                 with open(os.path.join(OUT_DIR, name + ".gen.json"), "w") as json_file:
                     json.dump(structured, json_file)
                 with open(os.path.join(OUT_DIR, name + ".gen.pickle"), "wb") as pkl_file:
                     pickle.dump(structured, pkl_file)
 
+    if len(frames) <= 1:
+        # sanity check, ne treba mergeat ništa jer se radi o jednom dokumentu
+        return
+    
+    frame = frames[0]
+    for it in frames[1:]:
+        frame = pd.merge(frame, it, how='outer')
+    frame.to_csv(os.path.join(OUT_DIR, "merged.gen.csv"))
+    frame.to_excel(os.path.join(OUT_DIR, "merged.gen.xlsx"))
+
+    with open(os.path.join(OUT_DIR, "merged.gen.json"), "w") as json_file:
+        json.dump(data, json_file)
+    with open(os.path.join(OUT_DIR, "merged.gen.pickle"), "wb") as pkl_file:
+        pickle.dump(data, pkl_file)
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
